@@ -11,14 +11,22 @@ const {
 
 const { sleep } = require('../../utils');
 const DistributionExecutable = require('../../artifacts/examples/call-contract-with-token/DistributionExecutable.sol/DistributionExecutable.json');
+const Slot = require('../../artifacts/examples/call-contract-with-token/Slot.sol/Slot.json');
 const Gateway = require('../../artifacts/@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGateway.sol/IAxelarGateway.json');
 const IERC20 = require('../../artifacts/@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IERC20.sol/IERC20.json');
 
 async function deploy(chain, wallet) {
-    console.log(`Deploying DistributionExecutable for ${chain.name}.`);
-    const contract = await deployContract(wallet, DistributionExecutable, [chain.gateway, chain.gasReceiver]);
+    console.log(`Deploying Slot for ${chain.name}.`);
+    const contract = await deployContract(wallet, Slot, [
+        chain.gateway,
+        chain.gasReceiver,
+        wallet.address,
+        wallet.address,
+        '0xc2fa98fab811b785b81c64ac875b31cc9e40f9d2',
+        10,
+    ]);
     chain.distributionExecutable = contract.address;
-    console.log(`Deployed DistributionExecutable for ${chain.name} at ${chain.distributionExecutable}.`);
+    console.log(`Deployed Slot for ${chain.name} at ${chain.distributionExecutable}.`);
 }
 
 async function test(chains, wallet, options) {
