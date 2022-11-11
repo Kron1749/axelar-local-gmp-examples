@@ -12,7 +12,6 @@ import '../../node_modules/openzeppelin-solidity/contracts/interfaces/IERC20.sol
 
 contract DistributionExecutable is AxelarExecutable, Ownable, Pausable, ReentrancyGuard {
     IAxelarGasService public immutable gasReceiver;
-    string public s_treasuryString;
     address[] public s_treasuryAddr;
     address public adminAddress; // address of the admin
     address public operatorAddress; // address of the operator
@@ -65,7 +64,6 @@ contract DistributionExecutable is AxelarExecutable, Ownable, Pausable, Reentran
     constructor(
         address gateway_,
         address gasReceiver_,
-        string  memory _treasury,
         address _treasuryAddr,
         address _adminAddress,
         address _operatorAddress,
@@ -73,7 +71,6 @@ contract DistributionExecutable is AxelarExecutable, Ownable, Pausable, Reentran
         uint256 _gameFee
     ) AxelarExecutable(gateway_) {
         gasReceiver = IAxelarGasService(gasReceiver_);
-        s_treasuryString = _treasury;
         s_treasuryAddr.push(_treasuryAddr);
         adminAddress = _adminAddress;
         operatorAddress = _operatorAddress;
@@ -81,22 +78,12 @@ contract DistributionExecutable is AxelarExecutable, Ownable, Pausable, Reentran
         gameFee = _gameFee;
     }
 
-    function test(
-        string memory destinationAddress,
-        address[] calldata destinationAddresses,
-        string memory symbol,
-        uint256 amount) external payable {
-            string memory destinationChain = 'Fantom';
-        sendToMany(destinationChain, destinationAddress, destinationAddresses, symbol, amount);
-    }
+    function sendToMany(uint256 amount, string memory destinationAddress) public payable onlyAdmin {
+        string memory symbol = 'aUSDC';
+        string memory destinationChain = 'Polygon';
+        // string memory destinationAddress = toAsciiString(address(this));
+        address[] memory destinationAddresses = s_treasuryAddr;
 
-    function sendToMany(
-        string memory destinationChain,
-        string memory destinationAddress,
-        address[] memory destinationAddresses,
-        string memory symbol,
-        uint256 amount
-    ) public payable {
         address tokenAddress = gateway.tokenAddresses(symbol);
         IERC20(tokenAddress).approve(address(gateway), amount);
         bytes memory payload = abi.encode(destinationAddresses);
@@ -241,27 +228,26 @@ contract DistributionExecutable is AxelarExecutable, Ownable, Pausable, Reentran
         return uint8(uint256(keccak256(abi.encodePacked(number + 1, _roundId))) % 100);
     }
 
-    function claimTreasury(uint256 value) external payable nonReentrant onlyAdmin {
+    function claimTreasury(uint256 value, address destAddr) external payable nonReentrant onlyAdmin {
         // address[] calldata destinationAddresses
         string memory symbol = 'aUSDC';
-        string memory destinationChain = 'Fantom';
-        string memory destinationAddress = toAsciiString(address(this));
+        string memory destinationChain = 'Polygon';
+        string memory destinationAddress = toAsciiString(destAddr);
         address[] memory destinationAddresses = s_treasuryAddr;
-        
-        sendToMany(destinationChain, destinationAddress, destinationAddresses, symbol, value);
 
+        // sendToMany(destinationChain, destinationAddress, destinationAddresses, symbol, value);
 
         emit TreasuryClaim(value);
     }
 
     function toAsciiString(address x) internal pure returns (string memory) {
         bytes memory s = new bytes(40);
-        for (uint i = 0; i < 20; i++) {
-            bytes1 b = bytes1(uint8(uint(uint160(x)) / (2**(8*(19 - i)))));
+        for (uint256 i = 0; i < 20; i++) {
+            bytes1 b = bytes1(uint8(uint256(uint160(x)) / (2**(8 * (19 - i)))));
             bytes1 hi = bytes1(uint8(b) / 16);
             bytes1 lo = bytes1(uint8(b) - 16 * uint8(hi));
-            s[2*i] = char(hi);
-            s[2*i+1] = char(lo);            
+            s[2 * i] = char(hi);
+            s[2 * i + 1] = char(lo);
         }
         return string(s);
     }
@@ -270,6 +256,7 @@ contract DistributionExecutable is AxelarExecutable, Ownable, Pausable, Reentran
         if (uint8(b) < 10) return bytes1(uint8(b) + 0x30);
         else return bytes1(uint8(b) + 0x57);
     }
+
     function getUserWinnings(address _address) external view returns (uint256) {
         return userWinnings[_address];
     }

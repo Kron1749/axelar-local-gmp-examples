@@ -17,97 +17,88 @@ const Treasury = require('../../artifacts/examples/call-contract-with-token/Trea
 
 async function deploy(chain, wallet) {
     console.log(`Deploying Slot for ${chain.name}.`);
-    const treasury = await deployContract(wallet,Treasury)
-    console.log(treasury.address)
+    const treasury = await deployContract(wallet, Treasury);
+    console.log(treasury.address);
     const contract = await deployContract(wallet, DistributionExecutable, [
         chain.gateway,
         chain.gasReceiver,
         treasury.address,
-        treasury.address, 
         wallet.address,
         wallet.address,
-        '0xc2fa98fab811b785b81c64ac875b31cc9e40f9d2',
+        '0x2c852e740B62308c46DD29B982FBb650D063Bd07',
         10,
     ]);
     chain.distributionExecutable = contract.address;
-    chain.treasury = treasury.address
+    chain.treasury = treasury.address;
     console.log(`Deployed Slot for ${chain.name} at ${chain.distributionExecutable}.`);
     console.log(`Deployed Treasury for ${chain.name} at ${chain.treasury}.`);
 }
 
 async function test(chains, wallet, options) {
-
-
     const args = options.args || [];
     const getGasPrice = options.getGasPrice;
     const source = chains.find((chain) => chain.name === 'Avalanche');
-    const destination = chains.find((chain) => chain.name === (args[1] || 'Fantom'));
+    const destination = chains.find((chain) => chain.name === (args[1] || 'Polygon'));
     const amount = Math.floor(parseFloat(args[2])) * 1e6 || 10e6;
     const accounts = args.slice(3);
-    
+
     for (const chain of [source, destination]) {
         const provider = getDefaultProvider(chain.rpc);
         chain.wallet = wallet.connect(provider);
         chain.contract = new Contract(chain.distributionExecutable, DistributionExecutable.abi, chain.wallet);
-        chain.treasury = new Contract(chain.treasury,Treasury.abi,chain.wallet)
+        chain.treasury = new Contract(chain.treasury, Treasury.abi, chain.wallet);
         chain.gateway = new Contract(chain.gateway, Gateway.abi, chain.wallet);
         const usdcAddress = chain.gateway.tokenAddresses('aUSDC');
         chain.usdc = new Contract(usdcAddress, IERC20.abi, chain.wallet);
     }
 
-    const treasuryAddress = await source.treasury.address
-    console.log(treasuryAddress)
+    const treasuryAddress = await source.treasury.address;
+    console.log(treasuryAddress);
+
+    console.log(`Source Treasury address is ${source.treasury.address}`);
+    console.log(`Destination Treasury address is ${destination.treasury.address}`);
+    console.log(`Source Slot address is ${source.contract.address}`);
+    console.log(`Destination Slot address is ${source.contract.address}`);
 
     if (accounts.length === 0) accounts.push(treasuryAddress);
-    await source.usdc.transfer(source.contract.address,10000000)
-    const balanceOfTreausryBeforeSource = (await source.usdc.balanceOf(treasuryAddress))
-    const balanceOfTreausryBeforDestination = (await destination.usdc.balanceOf(treasuryAddress))
-    const balanceOnSlotBeforeSource = (await source.usdc.balanceOf(source.contract.address))
-    const balanceOnSlotBeforeDestination = (await destination.usdc.balanceOf(destination.contract.address))
-    const balanceOnWalletBeforeSource = (await source.usdc.balanceOf(wallet.address))
-    const balanceOnWalletBeforeDestination = (await destination.usdc.balanceOf(wallet.address))
-    console.log(`balanceOnTreasuryBeforeSource on ${source.name} is ${balanceOfTreausryBeforeSource}`)
-    console.log(`balanceOnTreasuryBeforeDestination on ${destination.name} is ${balanceOfTreausryBeforDestination}`)
-    console.log(`balanceOnSlotBeforeSource on ${source.name} is ${balanceOnSlotBeforeSource}`)
-    console.log(`balanceOnSlotBeforeDestination on ${destination.name} is ${balanceOnSlotBeforeDestination}`)
-    console.log(`balanceOnWalletBeforeSource on ${source.name} is ${balanceOnWalletBeforeSource}`)
-    console.log(`balanceOnWalletBeforeDestination on ${destination.name} is ${balanceOnWalletBeforeDestination}`)
+    await source.usdc.transfer(source.contract.address, 10000000);
+    const balanceOfTreausryBeforeSource = await source.usdc.balanceOf(source.treasury.address);
+    const balanceOfTreausryBeforDestination = await destination.usdc.balanceOf(destination.treasury.address);
+    const balanceOnSlotBeforeSource = await source.usdc.balanceOf(source.contract.address);
+    const balanceOnSlotBeforeDestination = await destination.usdc.balanceOf(destination.contract.address);
+
+    console.log(`balanceOnTreasuryBeforeSource on ${source.name} is ${balanceOfTreausryBeforeSource}`);
+    console.log(`balanceOnTreasuryBeforeDestination on ${destination.name} is ${balanceOfTreausryBeforDestination}`);
+    console.log(`balanceOnSlotBeforeSource on ${source.name} is ${balanceOnSlotBeforeSource}`);
+    console.log(`balanceOnSlotBeforeDestination on ${destination.name} is ${balanceOnSlotBeforeDestination}`);
+
     const balance = BigInt(await destination.usdc.balanceOf(accounts[0]));
     const approveTx = await source.usdc.approve(source.contract.address, amount);
     await approveTx.wait();
-    // const Allowance = await source.usdc.allowance(source.contract.address,amount)
-    // await increaseAllowance.wait()
 
     const gasLimit = 3e6;
     const gasPrice = await getGasPrice(source, destination, AddressZero);
-    // const sendTx = await source.contract.test(destination.contract.address, accounts, 'aUSDC', amount,{
-    //     value: BigInt(Math.floor(gasLimit * gasPrice)),
-    // });
-    console.log(destination.contract.address)
-    console.log(treasuryAddress)
-    const sendTx = await source.contract.claimTreasury(amount,{
+    console.log(source.contract.address);
+    const sendTx = await source.contract.sendToMany(amount, source.treasury.address, {
         value: BigInt(Math.floor(gasLimit * gasPrice)),
-    })
+    });
 
     await sendTx.wait();
 
-       while (BigInt(await destination.usdc.balanceOf(accounts[0])) === balance) {
+    while (BigInt(await destination.usdc.balanceOf(accounts[0])) === balance) {
         await sleep(2000);
     }
 
-    console.log("AFTER --------")
-    const balanceOfTreausryAfterSource = (await source.usdc.balanceOf(treasuryAddress))
-    const balanceOfTreausryAfterDestination = (await destination.usdc.balanceOf(treasuryAddress))
-    const balanceOnSlotAfterSource = (await source.usdc.balanceOf(source.contract.address))
-    const balanceOnSlotAfterDestination = (await destination.usdc.balanceOf(destination.contract.address))
-    const balanceOnWalletAfterSource = (await source.usdc.balanceOf(wallet.address))
-    const balanceOnWalletAfterDestination = (await destination.usdc.balanceOf(wallet.address))
-    console.log(`balanceOnTreasuryAfterSource on ${source.name} is ${balanceOfTreausryAfterSource}`)
-    console.log(`balanceOfTreausryAfterDestination on ${destination.name} is ${balanceOfTreausryAfterDestination}`)
-    console.log(`balanceOnSlotAfterSource on ${source.name} is ${balanceOnSlotAfterSource}`)
-    console.log(`balanceOnSlotAfterDestination on ${destination.name} is ${balanceOnSlotAfterDestination}`)
-    console.log(`balanceOnWalletAfterSource on ${source.name} is ${balanceOnWalletAfterSource}`)
-    console.log(`balanceOnWalletAfterDestination on ${destination.name} is ${balanceOnWalletAfterDestination}`)
+    console.log('AFTER --------');
+    const balanceOfTreausryAfterSource = await source.usdc.balanceOf(source.treasury.address);
+    const balanceOfTreausryAfterDestination = await destination.usdc.balanceOf(destination.treasury.address);
+    const balanceOnSlotAfterSource = await source.usdc.balanceOf(source.contract.address);
+    const balanceOnSlotAfterDestination = await destination.usdc.balanceOf(destination.contract.address);
+
+    console.log(`balanceOnTreasuryAfterSource on ${source.name} is ${balanceOfTreausryAfterSource}`);
+    console.log(`balanceOfTreausryAfterDestination on ${destination.name} is ${balanceOfTreausryAfterDestination}`);
+    console.log(`balanceOnSlotAfterSource on ${source.name} is ${balanceOnSlotAfterSource}`);
+    console.log(`balanceOnSlotAfterDestination on ${destination.name} is ${balanceOnSlotAfterDestination}`);
 }
 
 module.exports = {
